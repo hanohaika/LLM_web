@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChatGPT チャット</title>
+  <style>
+    body { font-family: Arial; margin: 20px; background: #f1f1f1;}
+    .container {max-width: 700px; margin: auto; padding: 15px; background: #fff; border-radius: 8px; box-sizing: border-box;}
+    .form-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap;}
+    .form-row label { font-weight: bold; white-space: nowrap; font-size: 0.8em}
+    select, input[type="text"], input[type="number"] { flex-grow: 1; padding: 6px 8px; box-sizing: border-box; min-width: 70px; }
+    #role { flex-grow: 2; min-width: 200px; }
+    #temperature, #max-tokens { max-width: 80px; }
+    .checkbox-inline { display: flex; align-items: center; gap: 6px; font-weight: bold; background: #eef; padding: 10px; border-radius: 6px; user-select: none; cursor: pointer; flex-wrap: wrap; font-size: 0.95em;}
+    .checkbox-inline input[type="checkbox"] { transform: scale(1.2); cursor: pointer; margin: 0; }
+    .chat-log { max-height: 800px; overflow-y: auto; display: flex; flex-direction: column; margin-bottom: 10px;}
+    .bubble { padding: 10px 15px; border-radius: 15px; margin: 5px 0; max-width: 85%; white-space: pre-wrap; word-break: break-word;font-size: 0.8em; }
+    .user { background: #d1ecf1; align-self: flex-end; text-align: left;}
+    .assistant { background: #e2f0cb; align-self: flex-start; text-align: left;}
+    textarea { width: 100%; padding: 8px; margin: 8px 0; box-sizing: border-box; resize: vertical; font-family: Arial, sans-serif;  min-height: 40px;  max-height: 300px;  overflow-y: auto;}
+    button { width: 100%; padding: 10px; margin-bottom: 15px; font-weight: bold; box-sizing: border-box;}
+    .info-inline { font-size: 0.9em; color: #555; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px;}
+    .info-inline span { white-space: nowrap;}
+    .buttons-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .buttons-row button { flex-grow: 1; width: auto; padding: 8px; font-weight: normal; }
+    #past-sessions { margin-top: 10px; display: flex; flex-direction: column; gap: 10px;}
+    #past-sessions > div { display: flex; align-items: center; gap: 10px;}
+    #past-sessions button { padding: 4px 8px; font-size: 12px; min-width: 0px;}
+    #past-sessions button:hover { background-color: #e0e0e0;}
+    .button-inline { display: inline-block; margin-right: 8px;}
+　　.three-buttons button {flex: 10;min-width: 0;}
+.ask-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: nowrap;
+}
+
+/* GPTに聞くボタンの視認性改善 */
+.ask-button {
+  padding: 10px 16px;
+  background-color: #007bff;
+  color: white;
+  font-weight: bold;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* hover時のスタイル */
+.ask-button:hover {
+  background-color: #0056b3;
+}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="form-row">
+      <label for="api-key">APIキー：</label><input type="password" id="api-key" value="" />
+    </div>
+    <div class="form-row">
+      <label for="model">使用モデル：</label><select id="model"><option value="gpt-4o-mini">GPT‑4o‑mini</option><option value="gpt-4.1-mini" selected>GPT‑4.1‑mini</option><option value="gpt-4.1-nano">GPT‑4.1‑nano</option><option value="o3-mini">o3‑mini</option></select>
+      <label for="temperature">温度：</label><input type="number" id="temperature" value="0.2" min="0.2" max="0.8" step="0.1" />
+      <label for="max-tokens">最大トークン：</label><input type="number" id="max-tokens" value="8000" min="1000" max="20000" step="1000" />
+    </div>
+    <div class="form-row">
+      <label for="role">役割：</label><input type="text" id="role" value="あなたは、とても有能なアシスタントです。" />
+    </div>
+    <div class="chat-log" id="chat-log"></div>
+    <textarea id="question" rows="2" placeholder="質問を入力..."></textarea>
+<div class="form-row ask-row">
+  <label class="checkbox-inline" for="continue-session"><input type="checkbox" id="continue-session" checked />履歴引継</label>
+  <button id="ask-button" class="ask-button">❓GPTに聞く❓</button>
+</div>
+    <div class="info-inline">
+      <span>入力トークン: <span id="total-in-tokens">0</span>　出力トークン: <span id="total-out-tokens">0</span></span>
+      <span>料金: <span id="cost-jpy">¥0.0000</span></span>
+    </div>
+<div class="buttons-row three-buttons"><button id="clear-history">セッションの削除🗑️</button> <button id="end-session">セッションのアーカイブ📥</button></div>
+    <div><h3>🔁 過去セッション 🔁</h3>
+      <div id="past-sessions">
+        <!-- チェックボックスとコピー用ボタンはここに動的に追加されます -->
+      </div>
+    </div>
+    <div class="buttons-row"><button id="export-selected">☑したセッションをTXTで保存</button></div>
+    <div><h3>🗑️ データ削除 🗑️</h3>
+	<div class="buttons-row three-buttons"><button id="clear-cost">料金</button> <button id="clear-all-sessions">過去セッション</button></div></div>
+
+<div id="modal" style="display:none; position:fixed; top:10%; left:5%; right:5%; bottom:10%; background:#fff; border:1px solid #ccc; padding:10px; overflow:auto; z-index:9999;">
+  <button onclick="document.getElementById('modal').style.display='none'" style="position:absolute; top:5px; right:10px;">✖閉じる✖</button>
+  <pre id="modal-content" style="white-space:pre-wrap;"></pre>
+</div>
+
+  <script>
+const pricing = {'gpt-4o-mini': { inp: 0.15, out: 0.60 }, 'gpt-4.1-mini': { inp: 0.40, out: 1.60 }, 'gpt-4.1-nano': { inp: 0.10, out: 0.40 }, 'o3-mini': { inp: 2.00, out: 8.00 }};
+const usdToJpy = 150;
+let sessionMsgs = JSON.parse(localStorage.getItem('chat-history') || '[]');
+let totalIn = parseInt(localStorage.getItem('in-tokens') || '0');
+let totalOut = parseInt(localStorage.getItem('out-tokens') || '0');
+let totalCost = parseFloat(localStorage.getItem('cost-jpy') || '0');
+const chatLog = document.getElementById('chat-log');
+const inDisp = document.getElementById('total-in-tokens');
+const outDisp = document.getElementById('total-out-tokens');
+const costDisp = document.getElementById('cost-jpy');
+
+function append(role, txt) {
+  if (role === 'system') return;
+  const d = document.createElement('div'); d.className = 'bubble';
+  d.classList.add(role === 'user' ? 'user' : 'assistant');
+  d.textContent = txt; d.style.whiteSpace = 'pre-wrap';
+  if (role === 'user') { const spacer = document.createElement('div'); spacer.style.marginBottom = '10px'; chatLog.appendChild(spacer); }
+  chatLog.appendChild(d); chatLog.scrollTop = chatLog.scrollHeight;
+}
+
+function saveAll() {
+  localStorage.setItem('chat-history', JSON.stringify(sessionMsgs));
+  localStorage.setItem('in-tokens', totalIn);
+  localStorage.setItem('out-tokens', totalOut);
+  localStorage.setItem('cost-jpy', totalCost.toFixed(4));
+  inDisp.textContent = totalIn;
+  outDisp.textContent = totalOut;
+  costDisp.textContent = '¥' + totalCost.toFixed(4);
+}
+
+function archiveSession() {
+  if (sessionMsgs.length === 0) return alert('現在のセッションに履歴がありません。');
+  const timestamp = new Date().toLocaleString();
+  const archive = JSON.parse(localStorage.getItem('archived-sessions') || '[]');
+  archive.push({ title: timestamp, messages: sessionMsgs });
+  localStorage.setItem('archived-sessions', JSON.stringify(archive));
+  sessionMsgs = []; localStorage.removeItem('chat-history'); chatLog.innerHTML = '';
+  renderPastSessions(); saveAll(); alert('セッションを終了し、過去セッションに保存しました。');
+}
+
+function renderPastSessions() {
+  const container = document.getElementById('past-sessions'); container.innerHTML = '';
+  const archive = JSON.parse(localStorage.getItem('archived-sessions') || '[]');
+  if (archive.length === 0) return container.textContent = '過去のセッションはありません。';
+  archive.forEach((sess, idx) => {
+    const wrapper = document.createElement('div');
+    const btn = document.createElement('button');
+    const firstUserMsg = sess.messages.find(m => m.role === 'user');
+    const firstQuestion = firstUserMsg ? firstUserMsg.content.slice(0, 30).replace(/\n/g, ' ') + (firstUserMsg.content.length > 30 ? '…' : '') : '(最初の質問なし)';
+    btn.textContent = `📁 ${sess.title}｜${firstQuestion}`;
+    btn.onclick = () => {  const content = sess.messages.map(m => `[${m.role}] ${m.content}`).join('\n\n'); document.getElementById('modal-content').textContent = content; document.getElementById('modal').style.display = 'block';};
+    const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.id = `session-${idx}`; checkbox.className = 'session-checkbox';
+    const copyBtn = document.createElement('button'); copyBtn.textContent = '📋'; copyBtn.style.width = '40px';
+    copyBtn.onclick = () => { const text = sess.messages.map(m => `${m.role}: ${m.content}`).join('\n'); const tempArea = document.createElement('textarea');  tempArea.value = text; document.body.appendChild(tempArea);　tempArea.select(); try {document.execCommand('copy');　alert('セッション内容をコピーしました'); } catch (err) { alert('コピーに失敗しました');  } document.body.removeChild(tempArea); }; wrapper.appendChild(btn); wrapper.appendChild(checkbox); wrapper.appendChild(copyBtn); container.appendChild(wrapper);});
+}
+function copyModalContent() {
+  const text = document.getElementById('modal-content').textContent;
+  const tempArea = document.createElement('textarea');
+  tempArea.value = text;
+  document.body.appendChild(tempArea);
+  tempArea.select();try { document.execCommand('copy');alert('モーダルの内容をコピーしました。');} catch (err) { alert('コピーに失敗しました。');}
+  document.body.removeChild(tempArea);
+}
+
+window.addEventListener('load', () => {  sessionMsgs.forEach(m => append(m.role, m.content));  saveAll();  renderPastSessions();  const questionInput = document.getElementById('question');  questionInput.addEventListener('input', () => {    questionInput.style.height = 'auto';    questionInput.style.height = questionInput.scrollHeight + 'px';  });});
+
+document.getElementById('clear-history').addEventListener('click', () => {
+  if (!confirm('履歴をリセットしますか？')) return;
+  sessionMsgs = []; localStorage.removeItem('chat-history'); chatLog.innerHTML = ''; saveAll();
+});
+
+document.getElementById('clear-cost').addEventListener('click', () => {
+  if (!confirm('トークン・コストをリセットしますか？')) return;
+  totalIn = 0; totalOut = 0; totalCost = 0;
+  localStorage.setItem('in-tokens', '0'); localStorage.setItem('out-tokens', '0'); localStorage.setItem('cost-jpy', '0'); saveAll();
+});
+
+document.getElementById('end-session').addEventListener('click', archiveSession);
+
+document.getElementById('ask-button').addEventListener('click', async () => {
+  const apiKey = document.getElementById('api-key').value.trim();
+  const q = document.getElementById('question').value.trim();
+  if (!apiKey || !q) return alert('APIキーと質問を入力してください');
+  const model = document.getElementById('model').value;
+  const role = document.getElementById('role').value;
+  const temp = parseFloat(document.getElementById('temperature').value);
+  const maxT = parseInt(document.getElementById('max-tokens').value);
+  const cont = document.getElementById('continue-session').checked;
+  append('user', q);
+  let msgs = cont ? [...sessionMsgs] : [];
+  if (!msgs.some(m => m.role === 'system')) msgs.unshift({ role: 'system', content: role });
+  msgs.push({ role: 'user', content: q });
+  try {
+    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({ model, messages: msgs, temperature: temp, max_tokens: maxT })
+    });
+    const data = await resp.json();
+    if (!data.choices?.[0]?.message) return append('assistant', 'エラー: ' + (data.error?.message || '不明'));
+    const reply = data.choices[0].message.content.trim();
+    append('assistant', reply);
+    const inT = data.usage?.prompt_tokens || 0;
+    const outT = data.usage?.completion_tokens || 0;
+    const costUsd = (inT / 1e6) * pricing[model].inp + (outT / 1e6) * pricing[model].out;
+    const costJpy = costUsd * usdToJpy;
+    totalIn += inT; totalOut += outT; totalCost += costJpy;
+    if (cont) { sessionMsgs = msgs; sessionMsgs.push({ role: 'assistant', content: reply }); }
+    document.getElementById('question').value = ''; saveAll();
+  } catch (e) { append('assistant', 'エラー: ' + e.message); }
+});
+
+document.getElementById('export-selected').addEventListener('click', () => {
+  const archive = JSON.parse(localStorage.getItem('archived-sessions') || '[]');
+  if (archive.length === 0) return alert('過去のセッションはありません。');
+  const checkedIndexes = Array.from(document.querySelectorAll('#past-sessions .session-checkbox')).map((cb, idx) => cb.checked ? idx : -1).filter(idx => idx !== -1);
+  if (checkedIndexes.length === 0) return alert('エクスポートするセッションを選択してください。');
+  let exportText = '';
+  checkedIndexes.forEach(idx => {
+    const sess = archive[idx];
+    exportText += `=== セッション: ${sess.title} ===\n`;
+    sess.messages.forEach(m => { exportText += `[${m.role}] ${m.content}\n`; });
+    exportText += '\n\n';
+  });
+   const bom = new Uint8Array([0xEF, 0xBB, 0xBF]); // UTF-8 BOM
+  const blob = new Blob([bom, exportText], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url;
+  a.download = `exported_sessions_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  alert('選択したセッションをテキストファイルとして保存しました。');
+});
+
+document.getElementById('clear-all-sessions').addEventListener('click', () => {
+  if (!confirm('⚠過去のセッションを全て削除しますか？ この操作は取り消せません。')) return;
+  localStorage.removeItem('archived-sessions');
+  renderPastSessions();
+  alert('過去のセッションを全て削除しました。');
+});
+  </script>
+
+</body>
+</html>
